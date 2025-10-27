@@ -9,6 +9,12 @@ TARGET_DIR="/usr/local"
 @object_type
 class HelloEfinix:
 
+    repository: str = "ghcr.io/scs-kno"
+    repo_host: str = "ghcr.io"
+    repo_user: str = "scs-kno"
+    installer: str = "https://www.efinixinc.com/dl/efinity-2025.1.110-linux-x64.tar.bz2"
+    efinity_version: str = "2025.1.110"
+
     certs = dag.cache_volume("certs")
     docker = dag.cache_volume("docker")
 
@@ -36,7 +42,7 @@ class HelloEfinix:
     async def efinity_installer(self) -> dagger.Container:
         """Create a container containing the installation sources"""
         ubuntu = await self.efinity_sw_deps()
-        src: dagger.File = dag.http("https://www.efinixinc.com/dl/efinity-2025.1.110-linux-x64.tar.bz2")
+        src: dagger.File = dag.http(self.installer)
 
         return (
             ubuntu.with_mounted_file("/tmp/effinity.tar.bz2", src)
@@ -53,3 +59,31 @@ class HelloEfinix:
             .with_env_variable("PATH", TARGET_DIR +
                                "/efinity/2025.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
         )
+
+
+    @function
+    async def efinity_publish(
+        self,
+        token: Annotated[dagger.Secret, dagger.Doc("API token")],
+    ) -> str:
+        """Create the questa base installation and publish it"""
+        efinity = await self.efinity_installer()
+        return (
+                await efinity
+                .with_registry_auth(self.repo_host, self.repo_user, token)
+                .publish(f"{self.repository}/efinity:{self.efinity_version}")
+               )
+
+    @function
+    async def efinity(
+            self,
+            token: Annotated[dagger.Secret, dagger.Doc("API token")],
+    ) -> dagger.Container:
+        """Return the efinity container from the scs repoistory"""
+        efinity = (
+                dag
+                .container()
+                .with_registry_auth(self.repo_host, self.repo_user, token)
+                #.from_(f"{self.repository}/efinity:{self.efinity_version}")
+               .from_(f"{self.repository}/efinix:latest"))
+        return efinity
