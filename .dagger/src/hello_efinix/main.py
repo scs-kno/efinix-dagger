@@ -84,6 +84,43 @@ class HelloEfinix:
                 dag
                 .container()
                 .with_registry_auth(self.repo_host, self.repo_user, token)
-                #.from_(f"{self.repository}/efinity:{self.efinity_version}")
-               .from_(f"{self.repository}/efinix:latest"))
+               .from_(f"{self.repository}/efinity:{self.efinity_version}")
+            )
         return efinity
+
+    @function
+    async def efinity_localrepo(
+            self,
+            token: Annotated[dagger.Secret, dagger.Doc("API token")],
+            ldir: Annotated[dagger.Directory, dagger.DefaultPath("/")],
+    ) -> dagger.Container:
+        """Return the efinity container from the scs repoistory"""
+        efinity = await self.efinity(token)
+        # ldir = dag.directory(os.path.dirname(os.path.realpath(__file__)))
+        populated_efinity = efinity.with_mounted_directory("/app", ldir).with_workdir("/app")
+        return populated_efinity
+
+    @function
+    async def efinity_synthesize(
+            self,
+            token: Annotated[dagger.Secret, dagger.Doc("API token")],
+            ldir: Annotated[dagger.Directory, dagger.DefaultPath("/")],
+    ) -> dagger.Container:
+        """Return the efinity container with synthesized hex file"""
+        efinity = await self.efinity_localrepo(token, ldir)
+        return (efinity
+                .with_exec(["sh", "-c", "efx_run helloworld.xml --output_dir outflow --flow map"])
+                .with_exec(["sh", "-c", "efx_run helloworld.xml --output_dir outflow --flow pnr"])
+                .with_exec(["sh", "-c", "efx_run helloworld.xml --output_dir outflow --flow pgm"])
+                )
+
+    @function
+    async def efinity_get(
+            self,
+            token: Annotated[dagger.Secret, dagger.Doc("API token")],
+            ldir: Annotated[dagger.Directory, dagger.DefaultPath("/")],
+    ) -> dagger.Directory:
+        """Export all files"""
+        efinity = await self.efinity_synthesize(token, ldir)
+        # content = await efinity.directory("/app/outflow/").entries()
+        return await efinity.directory("/app/outflow/")
