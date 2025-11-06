@@ -9,5 +9,5 @@ Explicitly enable modifying the host system with `-o`:
 dagger call efinity-get --token=file://.token  -o outflow
 ```
 
-All rights reserved where indicated. Otherwise MIT, re-use at will.
+All rights reserved where indicated. Otherwise re-use at will.
 
